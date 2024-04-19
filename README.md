@@ -1,5 +1,24 @@
 # python_term_mon
-monitor python sessions
+
+monitor python sessions - these scripts login to a cisco device and print the cisco device terminal output on the local terminal window of the machine they are run from.
+
+Some of these scripts enable specific debugs to aid in troubleshooting/monitoring.
+
+In short:
+
+login to each deivce in devices.json
+issue terminal monitor command
+read the output 
+print to local terminal
+
+-or- 
+
+login to each deivce in devices.json
+issue terminal monitor command
+issue any debug commands
+read the output 
+print to local terminal
+issue undebug all on shutdown.
 
 You need to install netmiko for yourself.
 
