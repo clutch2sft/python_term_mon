@@ -3,13 +3,27 @@ from concurrent.futures import ThreadPoolExecutor
 from getpass import getpass
 from netmiko import ConnectHandler
 
-import json, time, logging
+import json, time, logging, signal
 
 shutdown_event = Event()
+shutdown_initiated = False
+
 
 # Global logger setup for console
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                     handlers=[logging.StreamHandler()])
+
+
+def handle_interrupt():
+    global shutdown_initiated
+    if not shutdown_initiated:
+        logging.getLogger().info("Received keyboard interrupt, initiating shutdown.")
+        shutdown_event.set()
+        shutdown_initiated = True
+        #raise KeyboardInterrupt  # Raise KeyboardInterrupt only here, centrally
+
+def signal_handler(signal, frame):
+    handle_interrupt()  # Use the same centralized handling logic
 
 def setup_device_logger(ip_address):
     """Set up a logger for each device with a unique file."""
@@ -62,54 +76,73 @@ def connect_and_monitor(device):
             while not shutdown_event.is_set():
                 output = net_connect.read_channel()
                 if output:
-                    log_to_both(device_logger, f"Messages from {device['ip']}")
                     lines = output.split('\n')
+                    # Initialize a flag to check if any relevant message has been logged
+                    log_initial_message = False
+
                     for line in lines:
                         if line.strip():
-                            if "[DOT11_UPLINK_CONNECTED]" in line:
-                                log_to_both(device_logger, f"{line}\n")
-                            elif "Aux roam switch radio role" in line:
-                                log_to_both(device_logger, f"{line}\n")
-                            elif "[DOT11_UPLINK_FT_AUTHENTICATING]" in line:
-                                log_to_both(device_logger, f"{line}\n")
-                            elif "target channel" in line:
-                                log_to_both(device_logger, f"{line}\n")
-                            elif "DOT11-UPLINK_ESTABLISHED" in line:
-                                log_to_both(device_logger, f"{line}\n")
-                            elif "Peer assoc event received from driver" in line:
-                                device_logger.debug(f"{line}\n")
-                                stats = net_connect.send_command('show wgb statistic roaming')
-                                log_to_both(device_logger, f"This is probably not so useful because it was not designed for dual radio:")
-                                log_to_both(device_logger, f"{stats}\n")
+                            # Check the line against specific criteria
+                            if "[DOT11_UPLINK_CONNECTED]" in line or \
+                            "Aux roam switch radio role" in line or \
+                            "[DOT11_UPLINK_FT_AUTHENTICATING]" in line or \
+                            "target channel" in line or \
+                            "DOT11-UPLINK_ESTABLISHED" in line or \
+                            "Peer assoc event received from driver" in line:
+                                # Set the flag to True since we have a relevant message
+                                if not log_initial_message:
+                                    log_to_both(device_logger, f"Messages from {device['ip']}")
+                                    log_initial_message = True
+
+                                # Handle the special case separately
+                                if "Peer assoc event received from driver" in line:
+                                    device_logger.debug(f"{line}\n")
+                                    stats = net_connect.send_command('show wgb statistic roaming')
+                                    log_to_both(device_logger, f"This is probably not so useful because it was not designed for dual radio:")
+                                    log_to_both(device_logger, f"{stats}\n")
+                                else:
+                                    # Log the message normally for other criteria
+                                    log_to_both(device_logger, f"{line}\n")
                             else:
-                                device_logger.debug(device_logger, f"{line}\n")
+                                # Log to debug without changing the initial log flag
+                                device_logger.debug(f"{line}")
                 time.sleep(1)
+                log_initial_message = False
 
     except Exception as e:
-        log_to_both(f"An error occurred with {device['ip']}: {e}")
+        log_to_both(device_logger, f"An error occurred with {device['ip']}: {e}")
     finally:
         if 'net_connect' in locals():
             net_connect.send_command('u all')  # Cleanup command on shutdown
 
 def main():
-    try:
-        with open('devices.json', 'r') as file:
-            devices = json.load(file)
-        
-        executor = ThreadPoolExecutor(max_workers=len(devices))
+    with open('devices.json', 'r') as file:
+        devices = json.load(file)
+    
+    with ThreadPoolExecutor(max_workers=len(devices)) as executor:
         futures = [executor.submit(connect_and_monitor, device) for device in devices]
-
-        try:
+        
+        # Use a loop to periodically check if all futures are done
+        all_done = False
+        while not all_done:
+            all_done = True  # Assume all are done unless found otherwise
             for future in futures:
-                future.result()
-        except KeyboardInterrupt:
-            logging.getLogger().info("Received keyboard interrupt, initiating shutdown.")
-            shutdown_event.set()
-            raise
+                try:
+                    # Check if future is done; wait briefly
+                    result = future.result(timeout=0.1)  # Adjust timeout as needed
+                except TimeoutError:
+                    all_done = False  # One or more futures are not done
+                except Exception as e:
+                    logging.getLogger().error(f"Error processing future: {str(e)}")
+                    all_done = False  # Continue checking other futures
 
-    finally:
-        executor.shutdown(wait=True)
-        logging.getLogger().info("All threads have been cleanly shutdown.")
+            if shutdown_event.is_set():
+                logging.getLogger().info("Shutdown event is set. Breaking loop.")
+                break
+
+    # Shutdown message and cleanup
+    logging.getLogger().info("All threads have been cleanly shutdown.")
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGINT, signal_handler)
     main()
