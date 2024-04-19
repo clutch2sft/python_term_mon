@@ -1,0 +1,25 @@
+[
+    {
+        "device_type": "cisco_ios",
+        "ip": "1.1.1.1",
+        "username": "uname",
+        "password": "",
+        "secret": "",
+        "__comments__": [
+            "Copy this file to devices.json and update it with your device information",
+            "ip is the device ip address",
+            "username is the username to use to login to the device",
+            "password is the ssh users loging password if not provided here we call getpass() later",
+            "secret is the enable password of the device and if not provided we call getpass() later",
+            "leaving passwords empty is preferred for production use as getpass() is more secure",
+            "it is the authors opinion that putting password here as shown for device 2 below for lab use is ok"
+          ]
+    },
+    {
+        "device_type": "cisco_ios",
+        "ip": "1.1.1.2",
+        "username": "uname",
+        "password": "pwd1",
+        "secret": "pwd2"
+    }
+]
