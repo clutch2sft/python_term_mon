@@ -62,26 +62,27 @@ def connect_and_monitor(device):
             while not shutdown_event.is_set():
                 output = net_connect.read_channel()
                 if output:
-                    log_to_both(f"Messages from {device['ip']}")
+                    log_to_both(device_logger, f"Messages from {device['ip']}")
                     lines = output.split('\n')
                     for line in lines:
                         if line.strip():
                             if "[DOT11_UPLINK_CONNECTED]" in line:
-                                log_to_both(f"{line}\n")
+                                log_to_both(device_logger, f"{line}\n")
                             elif "Aux roam switch radio role" in line:
-                                log_to_both(f"{line}\n")
+                                log_to_both(device_logger, f"{line}\n")
                             elif "[DOT11_UPLINK_FT_AUTHENTICATING]" in line:
-                                log_to_both(f"{line}\n")
+                                log_to_both(device_logger, f"{line}\n")
                             elif "target channel" in line:
-                                log_to_both(f"{line}\n")
+                                log_to_both(device_logger, f"{line}\n")
                             elif "DOT11-UPLINK_ESTABLISHED" in line:
-                                log_to_both(f"{line}\n")
+                                log_to_both(device_logger, f"{line}\n")
                             elif "Peer assoc event received from driver" in line:
                                 device_logger.debug(f"{line}\n")
                                 stats = net_connect.send_command('show wgb statistic roaming')
-                                log_to_both(f"{stats}\n")
+                                log_to_both(device_logger, f"This is probably not so useful because it was not designed for dual radio:")
+                                log_to_both(device_logger, f"{stats}\n")
                             else:
-                                device_logger.debug(f"{line}\n")
+                                device_logger.debug(device_logger, f"{line}\n")
                 time.sleep(1)
 
     except Exception as e:
@@ -102,13 +103,13 @@ def main():
             for future in futures:
                 future.result()
         except KeyboardInterrupt:
-            log_to_both("Received keyboard interrupt, initiating shutdown.")
+            logging.getLogger().info("Received keyboard interrupt, initiating shutdown.")
             shutdown_event.set()
             raise
 
     finally:
         executor.shutdown(wait=True)
-        log_to_both("All threads have been cleanly shutdown.")
+        logging.getLogger().info("All threads have been cleanly shutdown.")
 
 if __name__ == "__main__":
     main()
