@@ -405,3 +405,4 @@ FodyWeavers.xsd
 /saved_cipcm_data/
 /*.txt
 devices.json
+config.json

@@ -1,0 +1,18 @@
+{
+  "debug_list": [
+    "debug wgb uplink event",
+    "debug wgb uplink scan info"
+  ],
+  "filter_list": [
+    "[DOT11_UPLINK_CONNECTED]",
+    "Aux roam switch radio role",
+    "[DOT11_UPLINK_FT_AUTHENTICATING]",
+    "target channel",
+    "DOT11-UPLINK_ESTABLISHED",
+    "Peer assoc event received from driver"
+  ],
+  "dot11_uplink_ev_regex": "DOT11_UPLINK_EV: parent_rssi: (-\\d+), configured low rssi: (-\\d+) serving (\\d+) scanning (\\d+)",
+  "outputdir": "./output",
+  "log_netmiko": false,
+  "debug_netmiko": false
+}

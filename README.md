@@ -1,5 +1,13 @@
 # python_term_mon
 
+monitor_terminal_3 is the current stable version for use.  It will not recieve any more udpates.
+
+monitor_terminal_4 is somewhat tested and adds a few things functionally:
+-moves class DeviceMonitor out our the main file into a class file
+-moves configurable items into config.json
+-sets output directory for log files and is configurable in config.json
+-adds date/timestamp to debug log filenames
+
 monitor python sessions - these scripts login to a cisco device and print the cisco device terminal output on the local terminal window of the machine they are run from.
 
 Some of these scripts enable specific debugs to aid in troubleshooting/monitoring.
