@@ -2,95 +2,91 @@ import logging, re, time, json, os
 from getpass import getpass
 from netmiko import ConnectHandler
 from datetime import datetime
+from RegexMessageTracker import RegexMessageTracker  # Assume the tracker class is imported
+from DeviceLogger import DeviceLogger
 
 class DeviceMonitor:
 
     def __init__(self, device, shutdown_event):
         self.device = device
-        self.last_dot11_message = None
-        self.dot11_message_count = 0
         self.ip = device['ip']
         self.shutdown_event = shutdown_event
-        # Load configuration
         config = self.load_config()
         self.debug_list = config['debug_list']
-        self.filter_list = config['filter_list']
-        self.dot11_uplink_ev_regex = re.compile(config['dot11_uplink_ev_regex'])
         self.output_dir = config['outputdir']
         self.log_netmiko = config['log_netmiko']
         self.debug_netmiko = config['debug_netmiko']
-        if self.debug_netmiko:
+
+        # Initialize RegexMessageTracker only if logging via Netmiko is not set
+        if not self.log_netmiko and not self.debug_netmiko:
+            regex_patterns = config['regex_patterns']  # Assume regex patterns are provided in config
+            alert_strings = config['alert_strings']  # Strings for console alerts
+            self.device_logger = DeviceLogger.get_logger(self.ip, self.output_dir, console_level=logging.WARNING)
+            self.tracker = RegexMessageTracker(regex_patterns, self.ip, self.output_dir, alert_strings, self.device_logger)
+        elif self.debug_netmiko:
             self.setup_netmiko_debug_logging()
-            self.device_logger = False
-        elif self.log_netmiko:
-            self.device_logger = False
+            self.device_logger = None
         else:
-            self.device_logger = self.setup_device_logger(device['ip'], config['outputdir'])
+            self.device_logger = None
 
     @staticmethod
     def load_config():
         with open('config.json', 'r') as file:
-            config = json.load(file)
-        return config
+            return json.load(file)
 
     def setup_device_connection(self):
-        # Setting up ConnectHandler with session_log
         if self.log_netmiko:
-            """Set up device connection with session and optional debug logging."""
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            os.makedirs(self.output_dir, exist_ok=True)
-            session_log_file = f"{self.output_dir}/netmiko_session_{self.device['ip']}_{timestamp}.log"
-            net_connect = ConnectHandler(**self.device, session_log=session_log_file)
-        else:
-            net_connect = ConnectHandler(**self.device)
-        return net_connect
-    
+            session_log_file = f"{self.output_dir}/netmiko_session_{self.ip}_{timestamp}.log"
+            return ConnectHandler(**self.device, session_log=session_log_file)
+        return ConnectHandler(**self.device)
+
     def setup_netmiko_debug_logging(self):
-        """Setup debug logging for Netmiko-specific logs."""
-        os.makedirs(self.output_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         log_filename = f"{self.output_dir}/netmiko_debug_log_{timestamp}.log"
-        
-        # Set up Netmiko specific debug logging
         netmiko_logger = logging.getLogger("netmiko")
         netmiko_logger.setLevel(logging.DEBUG)
         file_handler = logging.FileHandler(log_filename)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         file_handler.setFormatter(formatter)
         netmiko_logger.addHandler(file_handler)
-        netmiko_logger.propagate = False  # Stop the log messages from propagating to the root logger
-        
-        # If you want to also log to console
-        # console_handler = logging.StreamHandler()
-        # console_handler.setLevel(logging.DEBUG)
-        # formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        # console_handler.setFormatter(formatter)
-        # logging.getLogger().addHandler(console_handler)
-        # netmiko_logger.addHandler(console_handler)
+        netmiko_logger.propagate = False
 
-    def setup_device_logger(self, ip_address, output_dir='./output'):
-        """Set up a logger for each device with a unique file including a timestamp."""
-        # Ensure the output directory exists
+    def setup_device_logger(self, ip_address, output_dir):
         os.makedirs(output_dir, exist_ok=True)
-        
-        # Create a unique filename with date and timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"{output_dir}/device_monitor_debug_{ip_address}_{timestamp}.log"
-        
-        # Set up logging
         device_logger = logging.getLogger(f"device_{ip_address}")
         device_logger.setLevel(logging.DEBUG)
-        device_logger.propagate = False
-        
         file_handler = logging.FileHandler(filename)
-        file_handler.setLevel(logging.DEBUG)
-        
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        file_handler.setFormatter(formatter)
-        
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         device_logger.addHandler(file_handler)
-        
         return device_logger
+
+    def process_output(self, output):
+        if output and self.tracker:
+            lines = output.split('\n')
+            for line in lines:
+                if line.strip():
+                    self.tracker.process_line(line)
+        elif output:
+            lines = output.split('\n')
+            for line in lines:
+                if line.strip():
+                    self.process_line(line)
+
+    def process_line(self, line):
+        match = self.dot11_uplink_ev_regex.search(line)
+        if match:
+            current_message = match.group(0)
+            if current_message != self.last_dot11_message:
+                self.log_dot11_message()
+                self.last_dot11_message = current_message
+            self.dot11_message_count += 1
+        else:
+            # Check if the line should be logged at INFO level based on the filter list
+            log_level = logging.INFO if any(filter_item in line for filter_item in self.filter_list) else logging.DEBUG
+            self.log_both_conditionally(f"{self.device['ip']}:{line}", log_level)
 
     def log_to_console(self, message, level=logging.INFO):
                 # Log to console conditionally
@@ -115,13 +111,6 @@ class DeviceMonitor:
         if console and (level == logging.INFO or level == logging.ERROR) :
             logging.getLogger().info(message)
 
-    def log_dot11_message(self):
-        """Log the repeated message count only to the file."""
-        if self.last_dot11_message and self.dot11_message_count > 0:
-            # Log only to the device logger by setting console=False
-            self.log_both_conditionally(f"{self.ip}:{self.last_dot11_message} has repeated {self.dot11_message_count} times", logging.INFO, console=False)
-            self.dot11_message_count = 0
-
     def connect_and_monitor(self):
         ip = self.device['ip']
         try:
@@ -133,8 +122,10 @@ class DeviceMonitor:
             #with ConnectHandler(**self.device) as net_connect:
             with self.setup_device_connection() as net_connect:
                 net_connect.enable()
+                output = net_connect.send_command('u all')
+                logging.info(f"Connected to {ip} - Set undebug all as safety:{output}")
                 output = net_connect.send_command('terminal monitor')
-                logging.info(f"Connected to {ip} - {output}")
+                logging.info(f"Terminal Monitor Set:{output}")
                 #Check if there are any debug commands to execute
                 if self.debug_list:
                     for command in self.debug_list:
@@ -149,7 +140,7 @@ class DeviceMonitor:
                     self.process_output(output)
                     time.sleep(1)
                     # Manually flush the session log to ensure it's up-to-date
-                    if hasattr(net_connect, 'session_log'):
+                    if hasattr(net_connect, 'session_log') and self.log_netmiko:
                         net_connect.session_log.flush()
                 # Send 'undebug all' command if the shutdown event is set
                 if self.shutdown_event.is_set():
@@ -169,25 +160,6 @@ class DeviceMonitor:
         except Exception as e:
             logging.getLogger().error(f"Error with device {ip}: {e}")
         finally:
+            if self.tracker:
+                self.tracker.finish()
 
-            self.log_dot11_message()
-
-    def process_output(self, output):
-        if output:
-            lines = output.split('\n')
-            for line in lines:
-                if line.strip():
-                    self.process_line(line)
-
-    def process_line(self, line):
-        match = self.dot11_uplink_ev_regex.search(line)
-        if match:
-            current_message = match.group(0)
-            if current_message != self.last_dot11_message:
-                self.log_dot11_message()
-                self.last_dot11_message = current_message
-            self.dot11_message_count += 1
-        else:
-            # Check if the line should be logged at INFO level based on the filter list
-            log_level = logging.INFO if any(filter_item in line for filter_item in self.filter_list) else logging.DEBUG
-            self.log_both_conditionally(f"{self.device['ip']}:{line}", log_level)
