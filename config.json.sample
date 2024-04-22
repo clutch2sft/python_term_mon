@@ -1,20 +1,50 @@
 {
-  "debug_list": [
-    "debug wgb uplink event",
-    "debug wgb uplink scan info"
+  "devices": [
+    {
+        "device_type": "cisco_ios",
+        "ip": "1.1.1.1",
+        "username": "uname",
+        "password": "",
+        "secret": "",
+        "__comments__": [
+            "Copy this file to devices.json and update it with your device information",
+            "ip is the device ip address",
+            "username is the username to use to login to the device",
+            "password is the ssh users loging password if not provided here we call getpass() later",
+            "secret is the enable password of the device and if not provided we call getpass() later",
+            "leaving passwords empty is preferred for production use as getpass() is more secure",
+            "it is this authors opinion that putting passwords here as shown for device 2 below for lab use is ok"
+          ]
+    },
+    {
+        "device_type": "cisco_ios",
+        "ip": "1.1.1.2",
+        "username": "uname",
+        "password": "pwd1",
+        "secret": "pwd2"
+    }
   ],
-  "alert_strings": [
-    "[DOT11_UPLINK_CONNECTED]",
-    "Aux roam switch radio role",
-    "[DOT11_UPLINK_FT_AUTHENTICATING]",
-    "target channel",
-    "DOT11-UPLINK_ESTABLISHED",
-    "Peer assoc event received from driver"
-  ],
-  "regex_patterns": {
-    "dot11_uplink_ev_regex": "DOT11_UPLINK_EV: parent_rssi: (-\\d+), configured low rssi: (-\\d+) serving (\\d+) scanning (\\d+)"
-  },
-  "outputdir": "./output",
-  "log_netmiko": false,
-  "debug_netmiko": false
+  "configuration": {
+    "debug_list": [
+      "debug wgb uplink event",
+      "debug wgb uplink scan info"
+    ],
+    "alert_strings": [
+      "[DOT11_UPLINK_CONNECTED]",
+      "Aux roam switch radio role",
+      "[DOT11_UPLINK_FT_AUTHENTICATING]",
+      "target channel",
+      "DOT11-UPLINK_ESTABLISHED",
+      "Peer assoc event received from driver"
+    ],
+    "regex_patterns": {
+      "dot11_uplink_ev_regex": "DOT11_UPLINK_EV: parent_rssi: (-\\d+), configured low rssi: (-\\d+) serving (\\d+) scanning (\\d+)"
+    },
+    "output_dir": "./output",
+    "console_level": "WARNING",
+    "log_netmiko": false,
+    "debug_netmiko": false,
+    "log_format": "%(asctime)s - %(levelname)s - %(message)s"
+  }
+
 }

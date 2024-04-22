@@ -1,12 +1,29 @@
 # python_term_mon
 
+
+As of 4/22/2024 monitor_terminal_4 is pretty stable but not tested on multiple devices.  
+
+To use monitor_terminal_4:
+
+-make sure you install netmiko (pip install netmiko)
+-copy config.json.sample to config.json and update config items as needed
+- run: python monitor_terminal_4.py
+- to end press {crtl c}
+
+
 monitor_terminal_3 is the current stable version for use.  It will not recieve any more udpates.
 
 monitor_terminal_4 is somewhat tested and adds a few things functionally:
--moves class DeviceMonitor out our the main file into a class file
--moves configurable items into config.json
+-moves class DeviceMonitor out of the main file into a class file
+-moves deduplication of messages based on regex into RegexMessageTracker class file
+-creates a thread safe singleton like based logger with only 1 instanace for each ip address
+-creates a singleton config loader class with only on instance for the entire running processes
+-moves devices and configurable items into config.json
 -sets output directory for log files and is configurable in config.json
 -adds date/timestamp to debug log filenames
+-info logs to file and warning logs to console and file
+-handles case where user leaves __commments__ from config.json.sample in config.json
+
 
 monitor python sessions - these scripts login to a cisco device and print the cisco device terminal output on the local terminal window of the machine they are run from.
 

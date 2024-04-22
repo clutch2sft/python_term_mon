@@ -2,26 +2,26 @@ from threading import Event
 from concurrent.futures import ThreadPoolExecutor
 from DeviceMonitor import DeviceMonitor
 import json, time, logging, signal
+from ConfigurationLoader import ConfigLoader
+from DeviceLogger import DeviceLogger
 
 shutdown_event = Event()
 shutdown_initiated = False
 
-def handle_interrupt():
+def handle_interrupt(logger):
     global shutdown_initiated
     if not shutdown_initiated:
-        logging.getLogger().info("Received keyboard interrupt, initiating shutdown.")
+        logger.warning("Received keyboard interrupt, initiating shutdown.")
         shutdown_event.set()
         shutdown_initiated = True
 
-def signal_handler(signal, frame):
-    handle_interrupt()
+def signal_handler(logger):
+    def handle_signal(signum, frame):
+        handle_interrupt(logger)
+    return handle_signal
 
-def main():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
-                        handlers=[logging.StreamHandler()])
-    with open('devices.json', 'r') as file:
-        devices = json.load(file)
-    
+def main(wkst_logger):
+    wkst_logger.warning("Entering device monitor loop.")
     with ThreadPoolExecutor(max_workers=len(devices)) as executor:
         futures = [executor.submit(DeviceMonitor(device, shutdown_event).connect_and_monitor) for device in devices]
         
@@ -29,10 +29,14 @@ def main():
             time.sleep(0.1)  # Adjust as necessary to reduce busy waiting
         
         if shutdown_event.is_set():
-            logging.getLogger().info("Shutdown event is set. Breaking loop.")
+            wkst_logger.warning("Shutdown event is set. Breaking loop.")
 
-    logging.getLogger().info("All threads have been cleanly shutdown.")
+    wkst_logger.warning("All threads have been cleanly shutdown.")
 
 if __name__ == "__main__":
-    signal.signal(signal.SIGINT, signal_handler)
-    main()
+    config_loader = ConfigLoader()
+    devices = config_loader.get_devices()
+    config = config_loader.get_configuration()
+    wkst_logger = DeviceLogger.get_logger("workstation", config['output_dir'], config.get('console_level', None), format = config['log_format'])
+    signal.signal(signal.SIGINT, signal_handler(wkst_logger))
+    main(wkst_logger)

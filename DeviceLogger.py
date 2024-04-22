@@ -8,7 +8,7 @@ class DeviceLogger:
     _lock = Lock()
 
     @staticmethod
-    def get_logger(ip_address, output_dir="./logs", console_level=None):
+    def get_logger(ip_address, output_dir="./logs", console_level=None, format = None):
         """
         Returns a logger for the given IP address. If the logger does not already exist,
         it creates a new one with the specified settings, including an optional console logger.
@@ -16,11 +16,11 @@ class DeviceLogger:
         """
         with DeviceLogger._lock:
             if ip_address not in DeviceLogger._loggers:
-                DeviceLogger._setup_device_logger(ip_address, output_dir, console_level)
+                DeviceLogger._setup_device_logger(ip_address, output_dir, console_level, format)
         return DeviceLogger._loggers[ip_address]
 
     @staticmethod
-    def _setup_device_logger(ip_address, output_dir, console_level):
+    def _setup_device_logger(ip_address, output_dir, console_level, format):
         """
         Set up a logger for each device with a unique file including a timestamp,
         and optionally, a console handler based on the console_level.
@@ -34,7 +34,10 @@ class DeviceLogger:
 
         # File handler setup
         file_handler = logging.FileHandler(filename)
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        if format is not None:
+            formatter = logging.Formatter(format)
+        else:
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
 

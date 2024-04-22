@@ -1,9 +1,9 @@
-import re
+import re, json
 import logging
 from DeviceLogger import DeviceLogger
-
+from ConfigurationLoader import ConfigLoader
 class RegexMessageTracker:
-    def __init__(self, regex_patterns, ip_address, output_dir='./output', alert_strings=None, logger = None):
+    def __init__(self, ip_address, output_dir='./output'):
         """
         Initializes the RegexMessageTracker with a dictionary of regex patterns and sets up device-specific logging.
         Also sets up conditional console logging for specific alert strings.
@@ -13,17 +13,17 @@ class RegexMessageTracker:
         :param output_dir: Directory to store log files
         :param alert_strings: List of strings that, when matched, should also log to the console
         """
-        self.patterns = {key: re.compile(pattern) for key, pattern in regex_patterns.items()}
+        config_loader = ConfigLoader()
+        config = config_loader.get_configuration()
+        self.regex_patterns = config['regex_patterns']  # Assume regex patterns are provided in config
+        self.alert_strings = config['alert_strings']  # Strings for console alerts
+        self.ip = ip_address
+        self.patterns = {key: re.compile(pattern) for key, pattern in self.regex_patterns.items()}
         self.last_matched = {}
         self.match_counts = {}
         self.first_matched_message = {}
         self.last_full_match = {}
-        if logger is None:
-            self.logger = DeviceLogger.get_logger(ip_address, output_dir, console_level=logging.WARNING)
-        else:
-            self.logger = logger
-        self.alert_strings = set(alert_strings if alert_strings else [])
-
+        self.logger = DeviceLogger.get_logger(ip_address, output_dir, console_level=logging.WARNING)
 
     def process_line(self, line):
         """
@@ -52,8 +52,8 @@ class RegexMessageTracker:
                     self.last_matched[key] = matched_text
                     self.match_counts[key] = 1
                     self.first_matched_message[key] = line  # Store the current line as the first match for this pattern
-                    # Log that a new match sequence has started
-                    self.log_direct(f"New match for {key}: {line}, count reset")
+                    # Log that a new match sequence has started - if desired uncomment if needed
+                    #self.log_direct(f"New match for {key}: {line}, count reset")
                 else:
                     # If the current match is the same as the last, increment the count
                     self.match_counts[key] += 1
@@ -81,7 +81,7 @@ class RegexMessageTracker:
         :param message: The message to log
         :param count: Number of times this message was seen before it changed
         """
-        self.logger.info(f"Pattern [{key}]: {message} (Count: {count})")
+        self.logger.info(f"From~{self.ip}:Pattern [{key}]: {message} (Count: {count})")
 
     def log_direct(self, line):
         """
@@ -89,13 +89,13 @@ class RegexMessageTracker:
         
         :param line: The line of text to log
         """
-        self.logger.info(f"Direct log: {line}")
+        self.logger.info(f"From~{self.ip}:{line}")
 
     def log_to_console(self, message):
         """
         Logs the message to the console specifically for alert strings.
         """
-        self.logger.warning(message)
+        self.logger.warning(f"From~{self.ip}:{message}")
 
     def finish(self):
         """
